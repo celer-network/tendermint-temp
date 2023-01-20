@@ -88,6 +88,9 @@ func NewWS(remoteAddr, endpoint string, options ...func(*WSClient)) (*WSClient, 
 	if err != nil {
 		return nil, err
 	}
+	if parsedURL.Scheme == protoHTTPS {
+		parsedURL.Scheme = protoWSS
+	}
 	// default to ws protocol, unless wss is explicitly specified
 	if parsedURL.Scheme != protoWSS {
 		parsedURL.Scheme = protoWS
