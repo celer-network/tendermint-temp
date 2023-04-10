@@ -267,7 +267,9 @@ func (c *WSClient) dial() error {
 		Proxy:   http.ProxyFromEnvironment,
 	}
 	rHeader := http.Header{}
-	conn, _, err := dialer.Dial(c.protocol+"://"+c.Address+c.Endpoint, rHeader) // nolint:bodyclose
+	url := c.protocol + "://" + c.Address + c.Endpoint
+	c.Logger.Info("dial", "url", url)
+	conn, _, err := dialer.Dial(url, rHeader) // nolint:bodyclose
 	if err != nil {
 		return err
 	}
