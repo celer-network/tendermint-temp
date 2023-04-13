@@ -22,7 +22,7 @@ const (
 	defaultMaxReconnectAttempts = 25
 	defaultWriteWait            = 0
 	defaultReadWait             = 0
-	defaultPingPeriod           = 0
+	defaultPingPeriod           = 1 * time.Hour
 )
 
 // WSClient is a JSON-RPC client, which uses WebSocket for communication with
@@ -440,6 +440,7 @@ func (c *WSClient) writeRoutine() {
 			); err != nil {
 				c.Logger.Error("failed to write message", "err", err)
 			}
+			c.Logger.Info("WS quited!")
 			return
 		}
 	}
