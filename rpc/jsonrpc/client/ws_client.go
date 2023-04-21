@@ -517,7 +517,14 @@ func (c *WSClient) readRoutine() {
 		// c.wg.Wait() in c.Stop(). Note we rely on Quit being closed so that it sends unlimited Quit signals to stop
 		// both readRoutine and writeRoutine
 
-		c.Logger.Info("got response", "id", response.ID, "result", fmt.Sprintf("%X", response.Result))
+		// up to 50 bytes or too many useless info in the log
+		var logInfo []byte
+		if len(response.Result) > 50 {
+			logInfo = response.Result[:50]
+		} else {
+			logInfo = response.Result[:]
+		}
+		c.Logger.Info("got response", "id", response.ID, "result", fmt.Sprintf("%X", logInfo))
 
 		select {
 		case <-c.Quit():
