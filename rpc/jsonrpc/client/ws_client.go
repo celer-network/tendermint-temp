@@ -12,14 +12,13 @@ import (
 	"github.com/gorilla/websocket"
 	metrics "github.com/rcrowley/go-metrics"
 
-	tmrand "github.com/tendermint/tendermint/libs/rand"
 	"github.com/tendermint/tendermint/libs/service"
 	tmsync "github.com/tendermint/tendermint/libs/sync"
 	types "github.com/tendermint/tendermint/rpc/jsonrpc/types"
 )
 
 const (
-	defaultMaxReconnectAttempts = 25
+	defaultMaxReconnectAttempts = 0 // without limit
 	defaultWriteWait            = 0
 	defaultReadWait             = 0
 	defaultPingPeriod           = 1 * time.Hour
@@ -277,8 +276,7 @@ func (c *WSClient) dial() error {
 	return nil
 }
 
-// reconnect tries to redial up to maxReconnectAttempts with exponential
-// backoff.
+// reconnect tries to redial up to maxReconnectAttempts with consitent interval.
 func (c *WSClient) reconnect() error {
 	attempt := 0
 
@@ -292,11 +290,11 @@ func (c *WSClient) reconnect() error {
 	}()
 
 	for {
-		jitter := time.Duration(tmrand.Float64() * float64(time.Second)) // 1s == (1e9 ns)
-		backoffDuration := jitter + ((1 << uint(attempt)) * time.Second)
+		//jitter := time.Duration(tmrand.Float64() * float64(time.Second)) // 1s == (1e9 ns)
+		//backoffDuration := jitter + ((1 << uint(attempt)) * time.Second)
 
-		c.Logger.Info("reconnecting", "attempt", attempt+1, "backoff_duration", backoffDuration)
-		time.Sleep(backoffDuration)
+		interval := 10 * time.Second
+		c.Logger.Info("reconnecting", "attempt", attempt+1, "interval", interval)
 
 		err := c.dial()
 		if err != nil {
@@ -311,9 +309,11 @@ func (c *WSClient) reconnect() error {
 
 		attempt++
 
-		if attempt > c.maxReconnectAttempts {
+		if c.maxReconnectAttempts != 0 && attempt > c.maxReconnectAttempts {
 			return fmt.Errorf("reached maximum reconnect attempts: %w", err)
 		}
+
+		time.Sleep(interval)
 	}
 }
 
