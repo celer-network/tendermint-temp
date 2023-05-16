@@ -221,7 +221,7 @@ func (c *WSClient) IsActive() bool {
 func (c *WSClient) Send(ctx context.Context, request types.RPCRequest) error {
 	select {
 	case c.send <- request:
-		c.Logger.Info("sent a request", "req", request)
+		c.Logger.Info("sent a request", "req", request, "remote", c.Address)
 		// c.mtx.Lock()
 		// c.sentIDs[request.ID.(types.JSONRPCIntID)] = true
 		// c.mtx.Unlock()
@@ -294,13 +294,13 @@ func (c *WSClient) reconnect() error {
 		//backoffDuration := jitter + ((1 << uint(attempt)) * time.Second)
 
 		interval := 10 * time.Second
-		c.Logger.Info("reconnecting", "attempt", attempt+1, "interval", interval)
+		c.Logger.Info("reconnecting", "attempt", attempt+1, "interval", interval, "remote", c.Address)
 
 		err := c.dial()
 		if err != nil {
-			c.Logger.Error("failed to redial", "err", err)
+			c.Logger.Error("failed to redial", "err", err, "remote", c.Address)
 		} else {
-			c.Logger.Info("reconnected")
+			c.Logger.Info("reconnected", "remote", c.Address)
 			if c.onReconnect != nil {
 				go c.onReconnect()
 			}
@@ -329,17 +329,17 @@ func (c *WSClient) processBacklog() error {
 	case request := <-c.backlog:
 		if c.writeWait > 0 {
 			if err := c.conn.SetWriteDeadline(time.Now().Add(c.writeWait)); err != nil {
-				c.Logger.Error("failed to set write deadline", "err", err)
+				c.Logger.Error("failed to set write deadline", "err", err, "remote", c.Address)
 			}
 		}
 		if err := c.conn.WriteJSON(request); err != nil {
-			c.Logger.Error("failed to resend request", "err", err)
+			c.Logger.Error("failed to resend request", "err", err, "remote", c.Address)
 			c.reconnectAfter <- err
 			// requeue request
 			c.backlog <- request
 			return err
 		}
-		c.Logger.Info("resend a request", "req", request)
+		c.Logger.Info("resend a request", "req", request, "remote", c.Address)
 	default:
 	}
 	return nil
@@ -352,9 +352,9 @@ func (c *WSClient) reconnectRoutine() {
 			// wait until writeRoutine and readRoutine finish
 			c.wg.Wait()
 			if err := c.reconnect(); err != nil {
-				c.Logger.Error("failed to reconnect", "err", err, "original_err", originalError)
+				c.Logger.Error("failed to reconnect", "err", err, "original_err", originalError, "remote", c.Address)
 				if err = c.Stop(); err != nil {
-					c.Logger.Error("failed to stop conn", "error", err)
+					c.Logger.Error("failed to stop conn", "error", err, "remote", c.Address)
 				}
 
 				return
@@ -406,11 +406,11 @@ func (c *WSClient) writeRoutine() {
 		case request := <-c.send:
 			if c.writeWait > 0 {
 				if err := c.conn.SetWriteDeadline(time.Now().Add(c.writeWait)); err != nil {
-					c.Logger.Error("failed to set write deadline", "err", err)
+					c.Logger.Error("failed to set write deadline", "err", err, "remote", c.Address)
 				}
 			}
 			if err := c.conn.WriteJSON(request); err != nil {
-				c.Logger.Error("failed to send request", "err", err)
+				c.Logger.Error("failed to send request", "err", err, "remote", c.Address)
 				c.reconnectAfter <- err
 				// add request to the backlog, so we don't lose it
 				c.backlog <- request
@@ -419,18 +419,18 @@ func (c *WSClient) writeRoutine() {
 		case <-ticker.C:
 			if c.writeWait > 0 {
 				if err := c.conn.SetWriteDeadline(time.Now().Add(c.writeWait)); err != nil {
-					c.Logger.Error("failed to set write deadline", "err", err)
+					c.Logger.Error("failed to set write deadline", "err", err, "remote", c.Address)
 				}
 			}
 			if err := c.conn.WriteMessage(websocket.PingMessage, []byte{}); err != nil {
-				c.Logger.Error("failed to write ping", "err", err)
+				c.Logger.Error("failed to write ping", "err", err, "remote", c.Address)
 				c.reconnectAfter <- err
 				return
 			}
 			c.mtx.Lock()
 			c.sentLastPingAt = time.Now()
 			c.mtx.Unlock()
-			c.Logger.Debug("sent ping")
+			c.Logger.Debug("sent ping", "remote", c.Address)
 		case <-c.readRoutineQuit:
 			return
 		case <-c.Quit():
@@ -438,9 +438,9 @@ func (c *WSClient) writeRoutine() {
 				websocket.CloseMessage,
 				websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""),
 			); err != nil {
-				c.Logger.Error("failed to write message", "err", err)
+				c.Logger.Error("failed to write message", "err", err, "remote", c.Address)
 			}
-			c.Logger.Info("WS quited!")
+			c.Logger.Info("WS quited!", "remote", c.Address)
 			return
 		}
 	}
@@ -465,7 +465,7 @@ func (c *WSClient) readRoutine() {
 		c.mtx.RUnlock()
 		c.PingPongLatencyTimer.UpdateSince(t)
 
-		c.Logger.Debug("got pong")
+		c.Logger.Debug("got pong", "remote", c.Address)
 		return nil
 	})
 
@@ -473,7 +473,7 @@ func (c *WSClient) readRoutine() {
 		// reset deadline for every message type (control or data)
 		if c.readWait > 0 {
 			if err := c.conn.SetReadDeadline(time.Now().Add(c.readWait)); err != nil {
-				c.Logger.Error("failed to set read deadline", "err", err)
+				c.Logger.Error("failed to set read deadline", "err", err, "remote", c.Address)
 			}
 		}
 		_, data, err := c.conn.ReadMessage()
@@ -482,7 +482,7 @@ func (c *WSClient) readRoutine() {
 				return
 			}
 
-			c.Logger.Error("failed to read response", "err", err)
+			c.Logger.Error("failed to read response", "err", err, "remote", c.Address)
 			close(c.readRoutineQuit)
 			c.reconnectAfter <- err
 			return
@@ -491,12 +491,12 @@ func (c *WSClient) readRoutine() {
 		var response types.RPCResponse
 		err = json.Unmarshal(data, &response)
 		if err != nil {
-			c.Logger.Error("failed to parse response", "err", err, "data", string(data))
+			c.Logger.Error("failed to parse response", "err", err, "data", string(data), "remote", c.Address)
 			continue
 		}
 
 		if err = validateResponseID(response.ID); err != nil {
-			c.Logger.Error("error in response ID", "id", response.ID, "err", err)
+			c.Logger.Error("error in response ID", "id", response.ID, "err", err, "remote", c.Address)
 			continue
 		}
 
@@ -524,7 +524,7 @@ func (c *WSClient) readRoutine() {
 		} else {
 			logInfo = response.Result[:]
 		}
-		c.Logger.Info("got response", "id", response.ID, "result", fmt.Sprintf("%X", logInfo))
+		c.Logger.Info("got response", "id", response.ID, "result", fmt.Sprintf("%X", logInfo), "remote", c.Address)
 
 		select {
 		case <-c.Quit():

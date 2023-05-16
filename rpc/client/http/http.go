@@ -725,7 +725,7 @@ func (w *WSEvents) eventListener() {
 			}
 
 			if resp.Error != nil {
-				w.Logger.Error("WS error", "err", resp.Error.Error())
+				w.Logger.Error("WS error", "err", resp.Error.Error(), "remote", w.remote)
 				// Error can be ErrAlreadySubscribed or max client (subscriptions per
 				// client) reached or Tendermint exited.
 				// We can ignore ErrAlreadySubscribed, but need to retry in other
