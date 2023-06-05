@@ -27,6 +27,7 @@ var errNegOrZeroHeight = errors.New("negative or zero height")
 type KeyPathFunc func(path string, key []byte) (merkle.KeyPath, error)
 
 // LightClient is an interface that contains functionality needed by Client from the light client.
+//
 //go:generate mockery --case underscore --name LightClient
 type LightClient interface {
 	ChainID() string
@@ -475,6 +476,29 @@ func (c *Client) Tx(ctx context.Context, hash []byte, prove bool) (*ctypes.Resul
 
 	// Validate the proof.
 	return res, res.Proof.Validate(l.DataHash)
+}
+
+func (c *Client) TxV2(ctx context.Context, hash []byte, prove bool, resultTx rpcclient.GeneralResultTx) (rpcclient.GeneralResultTx, error) {
+	res, err := c.next.TxV2(ctx, hash, prove, resultTx)
+	if err != nil || !prove {
+		return res, err
+	}
+
+	// Validate res.
+	if res.Height() <= 0 {
+		return nil, errNegOrZeroHeight
+	}
+
+	height := res.Height()
+
+	// Update the light client if we're behind.
+	l, err := c.updateLightClientIfNeededTo(ctx, &height)
+	if err != nil {
+		return nil, err
+	}
+
+	// Validate the proof.
+	return res, res.Proof().Validate(l.DataHash)
 }
 
 func (c *Client) TxSearch(

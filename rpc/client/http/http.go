@@ -471,6 +471,18 @@ func (c *baseRPCClient) Tx(ctx context.Context, hash []byte, prove bool) (*ctype
 	return result, nil
 }
 
+func (c *baseRPCClient) TxV2(ctx context.Context, hash []byte, prove bool, resultTx rpcclient.GeneralResultTx) (rpcclient.GeneralResultTx, error) {
+	params := map[string]interface{}{
+		"hash":  hash,
+		"prove": prove,
+	}
+	_, err := c.caller.Call(ctx, "tx", params, resultTx)
+	if err != nil {
+		return nil, err
+	}
+	return resultTx, nil
+}
+
 func (c *baseRPCClient) TxSearch(
 	ctx context.Context,
 	query string,

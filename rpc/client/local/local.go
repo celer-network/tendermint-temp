@@ -181,6 +181,10 @@ func (c *Local) Tx(ctx context.Context, hash []byte, prove bool) (*ctypes.Result
 	return core.Tx(c.ctx, hash, prove)
 }
 
+func (c *Local) TxV2(ctx context.Context, hash []byte, prove bool, resultTx rpcclient.GeneralResultTx) (rpcclient.GeneralResultTx, error) {
+	return nil, fmt.Errorf("not implemented")
+}
+
 func (c *Local) TxSearch(
 	_ context.Context,
 	query string,
