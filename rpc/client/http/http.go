@@ -2,6 +2,7 @@ package http
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"os"
@@ -753,8 +754,20 @@ func (w *WSEvents) eventListener() {
 			result := new(ctypes.ResultEvent)
 			err := tmjson.Unmarshal(resp.Result, result)
 			if err != nil {
-				w.Logger.Error("failed to unmarshal response", "err", err)
-				continue
+				if strings.Contains(err.Error(), "illegal base64 data") {
+					resultTmp := new(GenericResultEvent)
+					errI := tmjson.Unmarshal(resp.Result, resultTmp)
+					if errI != nil {
+						w.Logger.Error("failed to unmarshal response", "err", errI)
+						continue
+					}
+					result.Query = resultTmp.Query
+					result.Data = resultTmp.Data
+					result.Events = resultTmp.Events
+				} else {
+					w.Logger.Error("failed to unmarshal response", "err", err)
+					continue
+				}
 			}
 
 			w.mtx.RLock()
@@ -774,4 +787,10 @@ func (w *WSEvents) eventListener() {
 			return
 		}
 	}
+}
+
+type GenericResultEvent struct {
+	Query  string              `json:"query"`
+	Data   json.RawMessage     `json:"data"` // delay for decoding
+	Events map[string][]string `json:"events"`
 }
